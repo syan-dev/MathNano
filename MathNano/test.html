@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+</head>
+<body>
+  <div id="latex-container"></div>
+  <input type="text" id="latex-input" value="\frac{1}{2}" />
+  <button id="convert">Convert to Image</button>
+  <img id="output" />
+
+  <script>
+    const latex = document.getElementById("latex-input").value;
+    const container = document.getElementById("latex-container");
+    katex.render(latex, container, { throwOnError: false });
+
+    document.getElementById("convert").onclick = async () => {
+      const canvas = await html2canvas(container);
+      const imgData = canvas.toDataURL("image/png");
+      document.getElementById("output").src = imgData;
+    };
+  </script>
+</body>
+</html>

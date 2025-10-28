@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LaTeX to PNG Converter</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 20px;
+            background-color: #f9f9f9;
+            display: grid;
+            justify-content: center;
+        }
+        .container {
+            width: 600px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        h2 {
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 5px;
+            color: #333;
+        }
+        textarea {
+            width: 95%;
+            font-family: monospace;
+            font-size: 1.1em;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #btn-download {
+            background-color: #28a745;
+        }
+        #btn-download:hover {
+            background-color: #218838;
+        }
+        #mathjax-preview {
+            font-size: 1.5em;
+            padding: 20px;
+            border: 1px dashed #aaa;
+            margin-top: 15px;
+            min-height: 50px;
+            text-align: center;
+            overflow-x: auto;
+        }
+        img {
+            border: 1px solid #ccc;
+            margin-top: 15px;
+            max-width: 100%;
+            background-color: white;
+        }
+        a {
+            display: none; /* Hidden until ready */
+            margin-top: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>LaTeX to PNG Converter</h2>
+        
+        <label for="latex-input"><strong>Enter your LaTeX code here:</strong></label>
+        <textarea id="latex-input" rows="4">\frac{-b \pm \sqrt{b^2 - 4ac}}{2a}</textarea>
+        
+        <br><br>
+        <button id="btn-preview">Preview Math</button>
+        
+        <h3>Preview:</h3>
+        <div id="mathjax-preview"></div>
+        
+        <hr>
+        
+        <button id="btn-download">Download as PNG</button>
+        <h3>PNG Output:</h3>
+        <img id="png-output" alt="PNG Output">
+        <a id="png-link" download="equation.png">Download PNG</a>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            const latexInput = document.getElementById('latex-input');
+            const previewArea = document.getElementById('mathjax-preview');
+            const btnPreview = document.getElementById('btn-preview');
+            const btnDownload = document.getElementById('btn-download');
+            const pngImg = document.getElementById('png-output');
+            const pngLink = document.getElementById('png-link');
+
+            /**
+             * Renders the LaTeX from the textarea into the preview div.
+             */
+            function updatePreview() {
+                const latexCode = latexInput.value;
+                
+                // Wrap the LaTeX code in delimiters ($$ for display math)
+                previewArea.innerHTML = '$$' + latexCode + '$$';
+                
+                // Ask MathJax to typeset the new content
+                MathJax.typesetPromise([previewArea]).catch((err) => {
+                    console.error('MathJax typeset failed:', err);
+                    previewArea.innerHTML = '<span style="color: red;">Error rendering LaTeX.</span>';
+                });
+
+                // Hide old PNG output when preview changes
+                pngImg.src = '';
+                pngLink.style.display = 'none';
+            }
+
+            /**
+             * The core conversion function.
+             * Takes an SVG element and generates a PNG.
+             */
+            function convertSvgToPng(svgElement) {
+                // 1. Serialize the SVG element to a string
+                const serializer = new XMLSerializer();
+                let svgString = serializer.serializeToString(svgElement);
+
+                // 2. Create a data URL from the SVG string
+                const svgDataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
+
+                // 3. Load the data URL into an Image object
+                const image = new Image();
+
+                image.onload = () => {
+                    // 4. Draw the image onto a canvas
+                    const canvas = document.createElement('canvas');
+                    
+                    // Add some padding to the canvas
+                    const padding = 20;
+                    canvas.width = image.naturalWidth + padding * 2;
+                    canvas.height = image.naturalHeight + padding * 2;
+                    
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Fill background with white
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    // Draw the SVG image centered with padding
+                    ctx.drawImage(image, padding, padding);
+
+                    // 5. Get the PNG data URL from the canvas
+                    const pngDataUrl = canvas.toDataURL('image/png');
+
+                    // 6. Update the output image and download link
+                    pngImg.src = pngDataUrl;
+                    pngLink.href = pngDataUrl;
+                    pngLink.style.display = 'block';
+                };
+                
+                image.onerror = (e) => {
+                    console.error("Failed to load SVG data into Image object:", e);
+                };
+
+                image.src = svgDataUrl;
+            }
+
+            // --- Event Listeners ---
+
+            // Update preview when the "Preview" button is clicked
+            btnPreview.addEventListener('click', updatePreview);
+
+            // Convert to PNG when the "Download" button is clicked
+            btnDownload.addEventListener('click', () => {
+                // Find the SVG element inside the preview area
+                const mathSvg = previewArea.querySelector('svg');
+                
+                if (mathSvg) {
+                    convertSvgToPng(mathSvg);
+                } else {
+                    alert('Please preview your LaTeX math first!');
+                }
+            });
+
+            // Also render a preview on initial page load
+            updatePreview();
+        });
+    </script>
+
+</body>
+</html>

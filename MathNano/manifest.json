@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "MathNano AI",
+  "version": "1.0",
+  "description": "Your AI assistant for effortless math expression.",
+  "permissions": [
+    "sidePanel",
+    "activeTab",
+    "scripting",
+    "audioCapture",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_title": "Open LaTeX Editor"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content-script.js"],
+      "css": ["content-script.css"],
+      "run_at": "document_start"
+    }
+  ],
+  "icons": {
+    "16": "images/icon-128.png",
+    "48": "images/icon-128.png",
+    "128": "images/icon-128.png"
+  }
+}

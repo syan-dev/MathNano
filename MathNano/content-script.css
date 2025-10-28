@@ -1,0 +1,20 @@
+#mathnano-crop-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.4);
+    z-index: 2147483646; /* Just under the selection box */
+    display: none;
+    cursor: crosshair;
+}
+
+#mathnano-selection-box {
+    position: fixed;
+    border: 2px dashed #007bff; /* Blue dashed line */
+    background-color: rgba(0, 123, 255, 0.1); /* Light blue fill */
+    z-index: 2147483647; /* On top of everything */
+    display: none;
+    pointer-events: none; /* Allows mouse events to pass through to overlay */
+}
