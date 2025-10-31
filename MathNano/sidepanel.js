@@ -1,5 +1,22 @@
+// sidepanel.js (Updated)
+
 document.addEventListener('DOMContentLoaded', () => {
 	// --- Start of original code ---
+
+	// --- **** NEW: Model Status UI Elements **** ---
+	const statusIndicator = document.getElementById('model-status-indicator');
+	const statusText = document.getElementById('model-status-text');
+
+	// --- **** NEW: Input Buttons **** ---
+	// Get all input buttons to disable/enable them globally
+	const drawBtn = document.getElementById('draw-btn');
+	const cropBtn = document.getElementById('crop-btn');
+	const recordAudioBtn = document.getElementById('record-audio-btn');
+	const intelligentAskBtn = document.getElementById('intelligent-ask-btn');
+	const allInputButtons = [drawBtn, cropBtn, recordAudioBtn, intelligentAskBtn];
+
+	// --- **** NEW: Global Model Availability Flag **** ---
+	let isModelGloballyAvailable = false; // Assume false until checked
 
 	let currentImageBlob = null;
 	let currentImageDataUrl = null;
@@ -16,20 +33,18 @@ document.addEventListener('DOMContentLoaded', () => {
 	let drawingCtx = null;
 	let isDrawing = false;
 
-	// --- **** NEW: Image Settings Global **** ---
+	// --- Image Settings Global ---
 	let imageSettings = {
 		padding: 10,
-		scale: 2.0, // <-- Change this value
+		scale: 2.0,
 		fontColor: '#000000',
 		bgColor: '#FFFFFF',
 		transparent: false
 	};
-	// --- **** END OF NEW BLOCK **** ---
 
-
-	// --- NEW: Global Loading Overlay ---
+	// --- Global Loading Overlay ---
 	const globalLoadingOverlay = document.getElementById('global-loading-overlay');
-	// --- **** NEW: Recording Overlay **** ---
+	// --- Recording Overlay ---
 	const recordingOverlay = document.getElementById('recording-overlay');
 
 	function showLoadingOverlay() {
@@ -39,22 +54,15 @@ document.addEventListener('DOMContentLoaded', () => {
 	function hideLoadingOverlay() {
 		globalLoadingOverlay.classList.add('hidden');
 	}
-	// --- End of new helpers ---
 
-
-	// **** MODIFIED BLOCK: Replaced KaTeX logic with MathJax logic ****
-
-	// **** NEW: Get MathJax render element early for settings ****
+	// Get MathJax render element early for settings
 	const mathjaxRender = document.getElementById('mathjax-render');
 
 	/**
 	 * Renders the LaTeX to MathJax SVG in the preview box as the user types.
-	 * Does NOT generate the image.
 	 */
 	async function renderLivePreview() {
 		const latex = latexInput.value.trim();
-		// MODIFIED: Renamed element (already done)
-		// const mathjaxRender = document.getElementById('mathjax-render'); // Moved up
 		const emptyState = document.getElementById('empty-state');
 
 		if (!latex) {
@@ -70,104 +78,83 @@ document.addEventListener('DOMContentLoaded', () => {
 		mathjaxRender.style.display = 'block';
 		mathjaxRender.innerHTML = ''; // Clear previous render
 
-		// --- NEW MathJax Rendering Logic ---
-
-		// --- **** NEW: Apply font color setting to preview **** ---
+		// Apply settings
 		mathjaxRender.style.color = imageSettings.fontColor;
-		mathjaxRender.style.transform = `scale(${imageSettings.scale})`; // <-- Add this line
-		// --- **** END OF NEW BLOCK **** ---
+		mathjaxRender.style.transform = `scale(${imageSettings.scale})`;
 
 		// Set the text content, wrapped in display math delimiters
 		mathjaxRender.textContent = `$$${latex}$$`;
 
 		try {
-			// Check if MathJax is available
 			if (typeof MathJax === 'undefined' || !MathJax.typesetPromise) {
 				showMessage('MathJax is not loaded yet. Please wait.', 'error');
 				return;
 			}
-			// Tell MathJax to typeset this specific element
-			// We must wait for this to complete
 			await MathJax.typesetPromise([mathjaxRender]);
 		} catch (mjError) {
-			// This catches errors in the MathJax library itself
 			console.error("MathJax typesetting error:", mjError);
 			showMessage(`MathJax error: ${mjError.message}`, 'error');
 			disableActionButtons();
-			return; // Exit if MathJax fails
+			return;
 		}
-		// --- End of new logic ---
 
 		// Check if MathJax rendered an error
-		// MODIFIED: Changed error class from .katex-error to mjx-merror
 		const hasError = mathjaxRender.querySelector('mjx-merror') !== null;
 
 		if (hasError) {
 			showMessage('Invalid LaTeX syntax. Preview shows details.', 'error');
-			disableActionButtons(); // Cannot copy/download an error
+			disableActionButtons();
 		} else {
-			hideMessage(); // Clear any previous errors
-			enableActionButtons(); // Valid LaTeX, enable buttons
+			hideMessage();
+			enableActionButtons();
 		}
 	}
 
 	/**
 	 * Generates the image blob/dataURL from the ALREADY RENDERED SVG preview.
-	 * This is now called on-demand by the action buttons.
-	 * REMOVED: html2canvas. USES: SVG -> Canvas -> PNG
 	 * @returns {Promise<boolean>} True on success, false on failure.
 	 */
 	async function autoRender() {
-		// Clear previous image data
 		currentImageBlob = null;
 		currentImageDataUrl = null;
-		disableActionButtons(); // Disable buttons during *image generation* process
+		disableActionButtons();
 
 		const latex = latexInput.value.trim();
-		// MODIFIED: Renamed element (already done)
-		// const mathjaxRender = document.getElementById('mathjax-render'); // Moved up
 
 		if (!latex) {
 			resetPreview();
 			showEmptyState();
-			return false; // Return failure (should be disabled anyway)
+			return false;
 		}
 
-		// --- NEW: Check if the live preview has an error ---
-		// MODIFIED: Changed error class
 		const hasError = mathjaxRender.querySelector('mjx-merror') !== null;
 		if (hasError) {
 			showMessage('Cannot copy/download: Invalid LaTeX.', 'error');
-			disableActionButtons(); // Keep disabled
-			return false; // Return failure
+			disableActionButtons();
+			return false;
 		}
-		// --- End of new check ---
 
-		// --- **** MODIFIED: SVG to PNG conversion logic (applies settings) **** ---
+		// --- SVG to PNG conversion logic (applies settings) ---
 		try {
 			const svgElement = mathjaxRender.querySelector('svg');
 			if (!svgElement) {
 				throw new Error('No SVG element found in preview. Typesetting might have failed.');
 			}
 
-			// --- **** NEW: Apply Settings **** ---
 			const padding = imageSettings.padding;
 			const scale = imageSettings.scale;
-			// --- **** END OF NEW BLOCK **** ---
 
 			// 1. Get SVG dimensions
 			const svgWidth = svgElement.width.baseVal.value;
 			const svgHeight = svgElement.height.baseVal.value;
 			
 			// 2. Serialize SVG
-			// We must add xmlns attribute for standalone rendering if missing
 			if (!svgElement.getAttribute('xmlns')) {
 				svgElement.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
 			}
 			const svgXml = new XMLSerializer().serializeToString(svgElement);
 
 			// 3. Create a data URL from the SVG
-			// Use encodeURIComponent for special characters, then btoa
 			const svgDataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgXml)));
 
 			// 4. Use an Image object to load the SVG
@@ -176,28 +163,22 @@ document.addEventListener('DOMContentLoaded', () => {
 			// 5. Wrap image loading in a Promise to get the blob
 			const pngBlob = await new Promise((resolve, reject) => {
 				img.onload = () => {
-					// 6. Create a temporary canvas
 					const canvas = document.createElement('canvas');
-					// **** MODIFIED: Apply scale and padding to canvas size ****
 					canvas.width = (svgWidth * scale) + (padding * 2);
 					canvas.height = (svgHeight * scale) + (padding * 2);
 					const ctx = canvas.getContext('2d');
 
-					// 7. Fill background (respecting settings)
 					if (!imageSettings.transparent) {
 						ctx.fillStyle = imageSettings.bgColor;
 						ctx.fillRect(0, 0, canvas.width, canvas.height);
 					}
 
-					// 8. Draw the loaded SVG image onto the canvas (scaled)
 					ctx.drawImage(img, padding, padding, svgWidth * scale, svgHeight * scale);
-					// **** END OF MODIFICATION ****
 
-					// 9. Get blob and data URL
 					currentImageDataUrl = canvas.toDataURL('image/png');
 					canvas.toBlob((b) => {
 						if (b) {
-							resolve(b); // Resolve the promise with the blob
+							resolve(b);
 						} else {
 							reject(new Error('Failed to create PNG blob from canvas.'));
 						}
@@ -210,87 +191,51 @@ document.addEventListener('DOMContentLoaded', () => {
 				img.src = svgDataUrl;
 			});
 
-			// 10. Store the blob
 			currentImageBlob = pngBlob;
-
-			// SUCCESS
 			enableActionButtons();
-			return true; // Return success
+			return true;
 
 		} catch (error) {
 			showMessage(`Error generating image: ${error.message}`, 'error');
 			console.error('Image generation error:', error);
-			enableActionButtons(); // Re-enable so they can try again
-			return false; // Return failure
+			enableActionButtons();
+			return false;
 		}
-		// --- END OF MODIFIED BLOCK ---
 	}
 
-	// **** END OF MODIFIED BLOCK ****
-
-
-	// Update character and line count
-	// We need to find latexInput *inside* the DOMContentLoaded listener
 	const latexInput = document.getElementById('latex-input');
 
-	// **** MODIFIED BLOCK: `input` listener now calls `renderLivePreview` ****
-	// MODIFIED: Added async keyword
 	latexInput.addEventListener('input', async () => {
-		const text = latexInput.value;
-		// const charCount = text.length;
-		// const lineCount = text.split('\n').length;
-
-		// document.getElementById('char-count').textContent = `${charCount} character${charCount !== 1 ? 's' : ''}`;
-		// document.getElementById('line-count').textContent = `${lineCount} line${lineCount !== 1 ? 's' : ''}`;
-
-		// --- MODIFIED: Call live preview on every input ---
-		// MODIFIED: Added await
 		await renderLivePreview();
-		// --- End of modification ---
 	});
-	// **** END OF MODIFIED BLOCK ****
 
 
 	/**
-	   * Extracts and cleans a LaTeX string from various delimiters.
-	   * @param {string} rawText The raw string input.
-	   * @returns {string} The cleaned LaTeX code.
-	   */
+	 * Extracts and cleans a LaTeX string from various delimiters.
+	 */
 	function extractLatex(rawText) {
 		if (!rawText) return '';
 		let processedText = rawText.trim();
 
-		// 1. Handle ```latex ... ```, ```tex ... ```, ```math ... ```, or ``` ... ```
-		// This regex captures the content inside, ignoring the language identifier
-		// and trimming whitespace/newlines immediately after the opening/before the closing.
 		const codeBlockMatch = processedText.match(/^```(?:latex|tex|math)?\s*([\s\S]*?)\s*```$/);
 		if (codeBlockMatch && codeBlockMatch[1]) {
-			// We found a code block. Return the captured group, 
-			// trimmed, and replace internal newlines with a space.
 			return codeBlockMatch[1].trim().replace(/\n/g, ' ');
 		}
 
-		// 2. Handle $$...$$
-		// This regex is more robust and trims internal whitespace.
 		const displayMathMatch = processedText.match(/^\$\$\s*([\s\S]*?)\s*\$\$$/);
 		if (displayMathMatch && displayMathMatch[1]) {
-			// Also replace internal newlines with a space for multi-line equations.
 			return displayMathMatch[1].trim().replace(/\n/g, ' ');
 		}
 
-		// 3. Handle $...$
-		// This regex is also more robust.
 		const inlineMathMatch = processedText.match(/^\$\s*([^$]*?)\s*\$$/);
 		if (inlineMathMatch && inlineMathMatch[1]) {
 			return inlineMathMatch[1].trim();
 		}
 
-		// If no delimiters are found, return the original text.
-		// This handles cases where the AI *only* returns the LaTeX code.
 		return processedText;
 	}
 
-	// --- REWRITTEN: Helper function to insert LaTeX at the cursor ---
+	// Helper function to insert LaTeX at the cursor
 	function insertLatex(text) {
 		console.log("Before extraction: `" + text + "`");
 		text = extractLatex(text);
@@ -304,28 +249,30 @@ document.addEventListener('DOMContentLoaded', () => {
 		const end = input.selectionEnd;
 		const originalText = input.value;
 
-		// Insert the extracted text, replacing any selected text
 		input.value = originalText.substring(0, start) + text + originalText.substring(end);
 
-		// Move cursor to after the inserted text
 		const newCursorPos = start + text.length;
 		input.selectionStart = newCursorPos;
 		input.selectionEnd = newCursorPos;
 
-		// Dispatch input event to update counts and button states
 		input.dispatchEvent(new Event('input'));
 		showMessage('LaTeX inserted at cursor!', 'success');
-		input.focus(); // Focus the textarea after insertion
+		input.focus();
 	}
 
 	/**
 	 * AI Model Initialization Function
-	 * @param {'image' | 'audio'} type The type of input the model will expect.
-	 * @returns {Promise<LanguageModelSession | null>} The created session or null.
 	 */
 	async function initializeModelSession(type) {
+		// This check is now redundant because of the initial global check,
+		// but good for defense-in-depth if a specific model (e.g., 'image') fails.
+		if (!isModelGloballyAvailable) {
+			showMessage('AI Model is not available. Please check browser settings.', 'error');
+			return null;
+		}
+
 		if (typeof LanguageModel === 'undefined') {
-			showMessage('Error: Built-in AI API (LanguageModel) not found. Please enable experimental flags.', 'error');
+			showMessage('Error: Built-in AI API (LanguageModel) not found.', 'error');
 			return null;
 		}
 		const availability = await LanguageModel.availability({ expectedInputs: [{ type: type }] });
@@ -412,7 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	document.getElementById('clear-drawing-btn').addEventListener('click', clearDrawing);
 
 
-	// --- **** NEW: Shared Image Processing Function **** ---
+	// --- Shared Image Processing Function ---
     /**
      * Processes an image canvas. Shared logic for drawing, pasting, and cropping.
      * @param {HTMLCanvasElement} canvas The canvas element containing the image.
@@ -422,11 +369,8 @@ document.addEventListener('DOMContentLoaded', () => {
         showLoadingOverlay();
         disableActionButtons();
 
-		// Disable all input buttons
-		document.getElementById('draw-btn').disabled = true;
-		document.getElementById('crop-btn').disabled = true;
-		document.getElementById('record-audio-btn').disabled = true;
-		document.getElementById('intelligent-ask-btn').disabled = true;
+		// --- MODIFIED: Disable all input buttons using the global array ---
+		allInputButtons.forEach(btn => btn.disabled = true);
 
         try {
             if (!imageSession) imageSession = await initializeModelSession('image');
@@ -456,41 +400,33 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             hideLoadingOverlay();
             latexInput.dispatchEvent(new Event('input')); // Update preview
-            // Re-enable all input buttons
-			document.getElementById('draw-btn').disabled = false;
-			document.getElementById('crop-btn').disabled = false;
-			document.getElementById('record-audio-btn').disabled = false;
-			document.getElementById('intelligent-ask-btn').disabled = false;
+            
+            // --- MODIFIED: Only re-enable buttons if model is globally available ---
+			if (isModelGloballyAvailable) {
+				allInputButtons.forEach(btn => btn.disabled = false);
+			}
         }
     }
 	
-	// --- MODIFIED: Process Drawing Button ---
+	// --- Process Drawing Button ---
 	document.getElementById('process-drawing-btn').addEventListener('click', async () => {
 		hideDrawingModal();
-		// Use the new shared function
 		await processImageFromCanvas(
 			drawingCanvas,
 			'Analyze the provided drawing and extract the mathematical equation as a LaTeX string. Only output the LaTeX code.'
 		);
-		clearDrawing(); // Clear canvas after processing
+		clearDrawing();
 	});
 
 
-	// --- **** NEW: Crop from Screen Logic **** ---
-	
-    /**
-     * Handles the 'Crop' button click.
-     * It sends a message to the content script to start the selection process.
-     */
+	// --- Crop from Screen Logic ---
 	async function startCropSelection() {
         try {
-            // Find the current active tab
             const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
             if (activeTab && activeTab.id) {
-                // Send a message to the content script in that tab
                 const response = await chrome.tabs.sendMessage(activeTab.id, { action: "startCrop" });
 				if (response && response.status === "cropping_started") {
-                	console.log(response.status); // Should log "cropping_started"
+                	console.log(response.status);
 				} else {
 					throw new Error("Could not connect to content script.");
 				}
@@ -503,25 +439,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Add listener to the new crop button
 	document.getElementById('crop-btn').addEventListener('click', startCropSelection);
 
-
     /**
-     * NEW: Global listener for messages from content scripts.
-     * This is how the side panel receives the crop coordinates.
+     * Global listener for messages from content scripts.
      */
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === "cropComplete") {
             const { x, y, width, height, dpr } = request.cropData;
 
-			// Check for valid crop dimensions
 			if (width <= 0 || height <= 0) {
 				console.log("Crop cancelled or invalid dimensions.");
-				return; // Do nothing if crop was invalid
+				return;
 			}
 
-            // Use the activeTab permission to capture the screen
             chrome.tabs.captureVisibleTab(null, { format: "png" }, (fullImageDataUrl) => {
                 if (chrome.runtime.lastError) {
                     showMessage(`Error capturing tab: ${chrome.runtime.lastError.message}`, 'error');
@@ -534,10 +465,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const img = new Image();
                 img.onload = () => {
-                    // Create a canvas to draw the cropped image
                     const canvas = document.createElement('canvas');
                     
-                    // Adjust dimensions for device pixel ratio (e.g., Retina screens)
                     const finalWidth = width * dpr;
                     const finalHeight = height * dpr;
                     const finalX = x * dpr;
@@ -547,16 +476,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     canvas.height = finalHeight;
                     const ctx = canvas.getContext('2d');
 
-                    // Draw the cropped portion from the full screenshot
                     ctx.drawImage(
                         img,
-                        finalX, finalY,       // Source X, Y (from top-left of full screenshot)
-                        finalWidth, finalHeight, // Source Width, Height
-                        0, 0,                  // Destination X, Y (on our new canvas)
-                        finalWidth, finalHeight  // Destination Width, Height
+                        finalX, finalY,
+                        finalWidth, finalHeight,
+                        0, 0,
+                        finalWidth, finalHeight
                     );
 
-                    // Now send this canvas to the AI
                     processImageFromCanvas(
                         canvas, 
                         'Analyze the provided screenshot image and extract the mathematical equation as a LaTeX string. Only output the LaTeX code.'
@@ -570,28 +497,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-	// --- **** END OF NEW BLOCK **** ---
-
-
-	// --- **** MODIFIED: Audio Input Processing **** ---
-	const recordBtn = document.getElementById('record-audio-btn');
+	// --- Audio Input Processing ---
 	const stopBtn = document.getElementById('stop-record-btn');
 
-	recordBtn.addEventListener('click', async () => {
+	recordAudioBtn.addEventListener('click', async () => {
 		try {
 			if (!audioSession) audioSession = await initializeModelSession('audio');
-			if (!audioSession) return; // Initialization failed
+			if (!audioSession) return;
 
 			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 			mediaRecorder = new MediaRecorder(stream);
 			audioChunks = [];
 			mediaRecorder.ondataavailable = (event) => audioChunks.push(event.data);
 
-			// --- MODIFIED: mediaRecorder.onstop ---
 			mediaRecorder.onstop = async () => {
-				recordingOverlay.classList.add('hidden'); // Hide recording overlay
-				showLoadingOverlay(); // Show processing overlay
-				disableActionButtons(); // Disable copy/download buttons
+				recordingOverlay.classList.add('hidden');
+				showLoadingOverlay();
+				disableActionButtons();
 				try {
 					const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
 					console.log('Starting audio transcription...');
@@ -604,87 +526,70 @@ document.addEventListener('DOMContentLoaded', () => {
 						}
 					]);
 					console.log('Transcription Result: `' + response + '`');
-					insertLatex(response); // Uses new function
+					insertLatex(response);
 				} catch (error) {
 					console.error('Audio processing error:', error);
 					showMessage(`Audio processing failed: ${error.message}`, 'error');
 					if (audioSession) audioSession.destroy();
 					audioSession = null;
 				} finally {
-					hideLoadingOverlay(); // Hide processing overlay
-					// Re-enable input buttons
-                    document.getElementById('draw-btn').disabled = false;
-                    document.getElementById('crop-btn').disabled = false; // **** ADDED ****
-                    document.getElementById('record-audio-btn').disabled = false;
-                    document.getElementById('intelligent-ask-btn').disabled = false;
+					hideLoadingOverlay();
+					// --- MODIFIED: Only re-enable buttons if model is globally available ---
+					if (isModelGloballyAvailable) {
+						allInputButtons.forEach(btn => btn.disabled = false);
+					}
 					latexInput.dispatchEvent(new Event('input'));
 				}
 			};
 
 			mediaRecorder.start();
-			// --- NEW: Disable input buttons and show recording overlay ---
-            document.getElementById('draw-btn').disabled = true;
-            document.getElementById('crop-btn').disabled = true; // **** ADDED ****
-            document.getElementById('record-audio-btn').disabled = true;
-            document.getElementById('intelligent-ask-btn').disabled = true;
+			// --- MODIFIED: Disable all input buttons using the global array ---
+			allInputButtons.forEach(btn => btn.disabled = true);
             recordingOverlay.classList.remove('hidden');
 			showMessage('Recording audio...', 'info');
-            // --- END OF NEW BLOCK ---
 
 		} catch (error) {
 			console.error('Error starting recording:', error);
 			showMessage('Could not start recording: ' + error.message, 'error');
-			// --- NEW: Ensure buttons are re-enabled if getUserMedia fails ---
-            document.getElementById('draw-btn').disabled = false;
-            document.getElementById('crop-btn').disabled = false; // **** ADDED ****
-            document.getElementById('record-audio-btn').disabled = false;
-            document.getElementById('intelligent-ask-btn').disabled = false;
+			// --- MODIFIED: Only re-enable buttons if model is globally available ---
+			if (isModelGloballyAvailable) {
+				allInputButtons.forEach(btn => btn.disabled = false);
+			}
 		}
 	});
 
 	stopBtn.addEventListener('click', () => {
-		// --- MODIFIED: Only stop the recorder ---
 		if (mediaRecorder && mediaRecorder.state === 'recording') {
 			mediaRecorder.stop();
 		}
-        // All UI changes are now handled by the 'onstop' event listener
-        // --- END OF MODIFICATION ---
 	});
-	// --- **** END OF MODIFIED BLOCK **** ---
 
-
-	// --- **** NEW: Intelligent Ask Logic **** ---
-
-	// Get DOM elements for the new modal
-	const intelligentAskBtn = document.getElementById('intelligent-ask-btn');
+	// --- Intelligent Ask Logic ---
 	const intelligentAskModal = document.getElementById('intelligent-ask-modal');
 	const intelligentAskOverlay = document.getElementById('intelligent-ask-overlay');
 	const intelligentAskInput = document.getElementById('intelligent-ask-input');
 	const intelligentAskSubmitBtn = document.getElementById('intelligent-ask-submit-btn');
 	const intelligentAskCloseBtn = document.getElementById('intelligent-ask-close-btn');
 
-	// Modal helper functions
 	function showIntelligentAskModal() {
 		intelligentAskModal.classList.remove('hidden');
 		intelligentAskOverlay.classList.remove('hidden');
-		intelligentAskInput.focus(); // Auto-focus the input
+		intelligentAskInput.focus();
 	}
 	function hideIntelligentAskModal() {
 		intelligentAskModal.classList.add('hidden');
 		intelligentAskOverlay.classList.add('hidden');
-		intelligentAskInput.value = ''; // Clear input on close
+		intelligentAskInput.value = '';
 	}
 
-	// Event listeners for the new modal
 	intelligentAskBtn.addEventListener('click', showIntelligentAskModal);
 	intelligentAskCloseBtn.addEventListener('click', hideIntelligentAskModal);
 	intelligentAskOverlay.addEventListener('click', hideIntelligentAskModal);
 	intelligentAskSubmitBtn.addEventListener('click', processIntelligentAsk);
 
-	// Allow submitting with "Enter" key
 	intelligentAskInput.addEventListener('keydown', (e) => {
 		if (e.key === 'Enter' && !e.shiftKey) {
-			e.preventDefault(); // Prevent newline in textarea
+			e.preventDefault();
 			processIntelligentAsk();
 		}
 	});
@@ -696,7 +601,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		const promptText = intelligentAskInput.value.trim();
 		if (!promptText) {
 			hideIntelligentAskModal();
-			return; // Do nothing if input is empty
+			return;
 		}
 
 		hideIntelligentAskModal();
@@ -704,18 +609,21 @@ document.addEventListener('DOMContentLoaded', () => {
 		disableActionButtons();
 
 		try {
-			// Initialize the text-only session if it doesn't exist
 			if (!textSession) {
+				// This check is also redundant, but good for defense-in-depth
+				if (!isModelGloballyAvailable) {
+					throw new Error('AI Model is not available.');
+				}
 				if (typeof LanguageModel === 'undefined') {
 					throw new Error('Built-in AI API (LanguageModel) not found.');
 				}
-				// Check for default text model availability
+				
+				// We already checked availability, but we can do it again.
 				const availability = await LanguageModel.availability();
 				if (availability !== 'available') {
 					throw new Error(`AI Model is not available. Status: ${availability}`);
 				}
 
-				// Create the session with a specific system prompt
 				textSession = await LanguageModel.create({
 					initialPrompts: [
 						{ role: 'system', content: 'You are a mathematical assistant. The user will ask for a formula or equation in natural language. You must respond with ONLY the raw LaTeX code for that equation. Do not include any other text, explanations, or delimiters like $$, ```latex, or ```.' }
@@ -724,29 +632,22 @@ document.addEventListener('DOMContentLoaded', () => {
 				showMessage('Text AI session initialized!', 'success');
 			}
 
-			// Send the user's prompt to the AI
 			const response = await textSession.prompt(promptText);
 			console.log('Intelligent Ask Result: `' + response + '`');
-			insertLatex(response); // Insert the result into the main textarea
+			insertLatex(response);
 
 		} catch (error) {
 			console.error('Intelligent Ask error:', error);
 			showMessage(`Failed to get formula: ${error.message}`, 'error');
-			// Destroy session on error so it can be re-created
 			if (textSession) textSession.destroy();
 			textSession = null;
 		} finally {
 			hideLoadingOverlay();
-			latexInput.dispatchEvent(new Event('input')); // Trigger UI update (buttons, preview)
+			latexInput.dispatchEvent(new Event('input'));
 		}
 	}
 
-	// --- **** END OF NEW BLOCK **** ---
-
-
-	// --- **** NEW: Settings Modal Logic **** ---
-	
-	// Get DOM elements
+	// --- Settings Modal Logic ---
 	const settingsModal = document.getElementById('settings-modal');
 	const settingsOverlay = document.getElementById('settings-modal-overlay');
 	const settingsBtn = document.getElementById('settings-btn');
@@ -759,41 +660,34 @@ document.addEventListener('DOMContentLoaded', () => {
 	const settingBgColor = document.getElementById('setting-bg-color');
 	const settingTransparentBg = document.getElementById('setting-transparent-bg');
 
-	// Helper to toggle background input
 	function toggleBgInput() {
 		settingBgColor.disabled = settingTransparentBg.checked;
 	}
 
-	// Show modal
 	function showSettingsModal() {
-		// Populate modal with current settings
 		settingPadding.value = imageSettings.padding;
 		settingScale.value = imageSettings.scale;
 		settingFontColor.value = imageSettings.fontColor;
 		settingBgColor.value = imageSettings.bgColor;
 		settingTransparentBg.checked = imageSettings.transparent;
 
-		toggleBgInput(); // Set initial state of bg color input
+		toggleBgInput();
 		settingsModal.classList.remove('hidden');
 		settingsOverlay.classList.remove('hidden');
 	}
 
-	// Hide modal
 	function hideSettingsModal() {
 		settingsModal.classList.add('hidden');
 		settingsOverlay.classList.add('hidden');
 	}
 
-	// Save settings
 	async function saveSettings() {
-		// Read values, validate, and save
 		imageSettings.padding = parseInt(settingPadding.value, 10) || 0;
 		imageSettings.scale = parseFloat(settingScale.value) || 1.0;
 		imageSettings.fontColor = settingFontColor.value;
 		imageSettings.bgColor = settingBgColor.value;
 		imageSettings.transparent = settingTransparentBg.checked;
 
-		// Persist to chrome storage
 		if (chrome.storage && chrome.storage.local) {
 			chrome.storage.local.set({ imageSettings: imageSettings }, () => {
 				console.log('Image settings saved.');
@@ -802,59 +696,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
 		hideSettingsModal();
 		showMessage('Settings saved!', 'success');
-
-		// Re-render the live preview with new settings
 		await renderLivePreview();
 	}
 
-	// Load settings from storage
 	function loadSettings() {
 		if (chrome.storage && chrome.storage.local) {
 			chrome.storage.local.get(['imageSettings'], (result) => {
 				if (result.imageSettings) {
-					// Merge loaded settings with defaults to ensure new settings are applied
 					imageSettings = { ...imageSettings, ...result.imageSettings };
 					console.log('Image settings loaded:', imageSettings);
 				}
-				// Apply initial loaded settings to the preview area
 				mathjaxRender.style.color = imageSettings.fontColor;
-				mathjaxRender.style.transform = `scale(${imageSettings.scale})`; // <-- Add this line
-				// Re-render if there's text
+				mathjaxRender.style.transform = `scale(${imageSettings.scale})`;
 				if (latexInput.value.trim()) {
 					renderLivePreview();
 				}
 			});
 		} else {
-			// Fallback for non-extension environment
 			mathjaxRender.style.color = imageSettings.fontColor;
 		}
 	}
 
-	// Event Listeners
 	settingsBtn.addEventListener('click', showSettingsModal);
 	settingsCloseBtn.addEventListener('click', hideSettingsModal);
 	settingsOverlay.addEventListener('click', hideSettingsModal);
 	settingsSaveBtn.addEventListener('click', saveSettings);
 	settingTransparentBg.addEventListener('change', toggleBgInput);
 
-	// --- **** END OF NEW BLOCK **** ---
-
-
 	// --- Action Buttons (Copy, Download, Clear) ---
 
 	document.getElementById('copy-btn').addEventListener('click', async () => {
 		showMessage('Rendering and copying...', 'info');
 
-		// 1. Render the image
 		const success = await autoRender();
-
-		// 2. Check if render was successful and blob exists
 		if (!success || !currentImageBlob) {
 			showMessage('Failed to copy. Check LaTeX for errors.', 'error');
 			if (latexInput.value.trim().length > 0) {
-				// Re-enable if the *LaTeX is valid*, even if image gen failed
-				// MODIFIED: Renamed element and error class
-				// const mathjaxRender = document.getElementById('mathjax-render'); // Moved up
 				if (mathjaxRender.querySelector('mjx-merror') === null) {
 					enableActionButtons();
 				}
@@ -862,7 +739,6 @@ document.addEventListener('DOMContentLoaded', () => {
 			return;
 		}
 
-		// 3. Proceed with copy
 		try {
 			await navigator.clipboard.write([
 				new ClipboardItem({ 'image/png': currentImageBlob })
@@ -871,22 +747,16 @@ document.addEventListener('DOMContentLoaded', () => {
 		} catch (error) {
 			showMessage('Failed to copy image: ' + error.message, 'error');
 		}
-		enableActionButtons(); // Re-enable after operation
+		enableActionButtons();
 	});
 
 	document.getElementById('download-btn').addEventListener('click', async () => {
 		showMessage('Rendering and downloading...', 'info');
 
-		// 1. Render the image
 		const success = await autoRender();
-
-		// 2. Check if render was successful and data URL exists
 		if (!success || !currentImageDataUrl) {
 			showMessage('Failed to download. Check LaTeX for errors.', 'error');
 			if (latexInput.value.trim().length > 0) {
-				// Re-enable if the *LaTeX is valid*, even if image gen failed
-				// MODIFIED: Renamed element and error class
-				// const mathjaxRender = document.getElementById('mathjax-render'); // Moved up
 				if (mathjaxRender.querySelector('mjx-merror') === null) {
 					enableActionButtons();
 				}
@@ -894,7 +764,6 @@ document.addEventListener('DOMContentLoaded', () => {
 			return;
 		}
 
-		// 3. Proceed with download
 		const filename = 'latex-equation-' + Date.now() + '.png';
 		const a = document.createElement('a');
 		a.href = currentImageDataUrl;
@@ -904,16 +773,14 @@ document.addEventListener('DOMContentLoaded', () => {
 		document.body.removeChild(a);
 
 		showMessage('Image downloaded!', 'success');
-		enableActionButtons(); // Re-enable after operation
+		enableActionButtons();
 	});
 
 	document.getElementById('clear-btn').addEventListener('click', () => {
 		latexInput.value = '';
-		// Dispatch input event to reset UI (counts, buttons, preview)
 		latexInput.dispatchEvent(new Event('input'));
 		hideMessage();
 
-		// Destroy sessions to free resources
 		if (imageSession) {
 			imageSession.destroy();
 			imageSession = null;
@@ -924,13 +791,11 @@ document.addEventListener('DOMContentLoaded', () => {
 			audioSession = null;
 			console.log('Audio session destroyed.');
 		}
-		// --- **** NEW: Destroy text session **** ---
 		if (textSession) {
 			textSession.destroy();
 			textSession = null;
 			console.log('Text session destroyed.');
 		}
-		// --- **** END OF NEW BLOCK **** ---
 	});
 
 	// --- Helper Functions ---
@@ -964,11 +829,8 @@ document.addEventListener('DOMContentLoaded', () => {
 	}
 
 	function resetPreview() {
-		// MODIFIED: Renamed element
-		// const mathjaxRender = document.getElementById('mathjax-render'); // Moved up
 		mathjaxRender.innerHTML = '';
 		mathjaxRender.style.display = 'block';
-
 		currentImageBlob = null;
 		currentImageDataUrl = null;
 	}
@@ -983,13 +845,79 @@ document.addEventListener('DOMContentLoaded', () => {
 		document.getElementById('download-btn').disabled = true;
 	}
 
-	// Initialize
-	// --- **** NEW: Load settings on start **** ---
+
+	// --- **** NEW: Model Status Check Functions **** ---
+
+	/**
+	 * Updates the UI to show model status and disable/enable input buttons.
+	 * @param {boolean} isAvailable True if the model is loaded, false otherwise.
+	 */
+	function setModelStatus(isAvailable) {
+		isModelGloballyAvailable = isAvailable; // Set the global flag
+		statusIndicator.classList.remove('bg-yellow-400', 'animate-pulse');
+
+		if (isAvailable) {
+			// Set to GREEN status
+			statusIndicator.classList.add('bg-green-500');
+			statusText.textContent = 'Local model enabled';
+			statusText.classList.remove('text-gray-600');
+			statusText.classList.add('text-green-700');
+			
+			// Enable all input buttons
+			allInputButtons.forEach(btn => {
+				btn.disabled = false;
+				btn.classList.remove('opacity-50', 'cursor-not-allowed');
+			});
+		} else {
+			// Set to RED status
+			statusIndicator.classList.add('bg-red-500');
+			statusText.textContent = 'Unable to load local model';
+			statusText.classList.remove('text-gray-600');
+			statusText.classList.add('text-red-700');
+			
+			// Disable all input buttons
+			allInputButtons.forEach(btn => {
+				btn.disabled = true;
+				btn.classList.add('opacity-50', 'cursor-not-allowed');
+			});
+		}
+	}
+
+	/**
+	 * Checks for LanguageModel availability on load.
+	 * We check for the base (text) model.
+	 */
+	async function checkInitialModelAvailability() {
+		if (typeof LanguageModel === 'undefined') {
+			console.error('LanguageModel API not found. Disabling AI features.');
+			setModelStatus(false);
+			return;
+		}
+		
+		try {
+			// Check for the base text model availability
+			const availability = await LanguageModel.availability();
+			
+			if (availability === 'available') {
+				console.log('LanguageModel is available.');
+				setModelStatus(true);
+			} else {
+				console.warn(`LanguageModel not available. Status: ${availability}`);
+				setModelStatus(false);
+			}
+		} catch (error) {
+			console.error('Error checking model availability:', error);
+			setModelStatus(false);
+		}
+	}
+
+	// --- Initialization ---
+	
 	loadSettings();
-	// --- **** END OF NEW BLOCK **** ---
+	
+	// --- **** NEW: Check model status on load **** ---
+	checkInitialModelAvailability(); 
 
 	// Trigger input event on load to set the initial empty state
 	latexInput.dispatchEvent(new Event('input'));
-
-	// --- End of original code ---
 });

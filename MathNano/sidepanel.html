@@ -119,6 +119,11 @@
 			<p class="text-gray-600 text-sm">Your AI assistant for effortless math expression.</p>
 		</div>
 
+		<div id="model-status-container" class="flex items-center justify-center space-x-2">
+			<span id="model-status-indicator" class="w-3 h-3 rounded-full bg-yellow-400 animate-pulse"></span>
+			<span id="model-status-text" class="text-sm font-medium text-gray-600">Initializing AI model...</span>
+		</div>
+
 		<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
 			<label class="block text-sm font-semibold text-gray-700 mb-2 pl-2">LaTeX Input</label>
 
@@ -139,7 +144,7 @@
 					<button id="crop-btn"
 						class="flex items-center justify-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium text-sm hover:bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
 						<img src="svg/crop.svg" alt="" class="w-5 h-5 mr-2" />
-						<span>Crop</span>
+						<span>Screenshot</span>
 					</button>
 					<button id="record-audio-btn"
 						class="flex items-center justify-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium text-sm hover:bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
