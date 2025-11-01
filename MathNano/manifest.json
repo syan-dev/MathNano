@@ -8,7 +8,8 @@
     "activeTab",
     "scripting",
     "audioCapture",
-    "tabs"
+    "tabs",
+    "storage"
   ],
   "host_permissions": [
     "<all_urls>"
